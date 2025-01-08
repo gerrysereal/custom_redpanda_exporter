@@ -1,7 +1,6 @@
-use rdkafka::client::Client; 
+ 
 use rdkafka::config::ClientConfig;
-use rdkafka::consumer::{Consumer, BaseConsumer};
-use crate::metrics::redpanda::*;
+use rdkafka::consumer::BaseConsumer;
 
 pub struct RedpandaCollector {
     client: BaseConsumer, 
@@ -24,17 +23,14 @@ impl RedpandaCollector {
     }
 
     async fn collect_message_counts(&self) {
-        // TODO: Implement message count collection
         println!("Collecting message counts");
     }
 
     async fn collect_consumer_lag(&self) {
-        // TODO: Implement consumer lag collection
         println!("Collecting consumer lag");
     }
 
     async fn collect_latency(&self) {
-        // TODO: Implement latency collection
         println!("Collecting latency metrics");
     }
 }

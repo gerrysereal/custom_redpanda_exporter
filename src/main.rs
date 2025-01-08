@@ -1,42 +1,74 @@
-mod metrics;
-mod collectors;
-mod config;
-
-use prometheus::{Encoder, TextEncoder};
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
+use reqwest;
+use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::error::Error;
+use tokio;
 
-async fn metrics_handler(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let encoder = TextEncoder::new();
-    let metric_families = crate::metrics::redpanda::REGISTRY.gather();
-    let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
-    
-    Ok(Response::builder()
-        .status(200)
-        .header("Content-Type", encoder.format_type())
-        .body(Body::from(buffer))
-        .unwrap())
+#[derive(Clone)]
+struct MetricsCollector {
+    redpanda_url: String,
+    client: reqwest::Client,
+}
+
+impl MetricsCollector {
+    fn new(redpanda_url: String) -> Self {
+        MetricsCollector {
+            redpanda_url,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    async fn collect_metrics(&self) -> Result<String, Box<dyn Error>> {
+        let response = self
+            .client
+            .get(&self.redpanda_url)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(response)
+    }
+}
+
+async fn handle_metrics(
+    collector: MetricsCollector,
+    _req: Request<Body>,
+) -> Result<Response<Body>, Infallible> {
+    match collector.collect_metrics().await {
+        Ok(metrics) => Ok(Response::new(Body::from(metrics))),
+        Err(e) => {
+            eprintln!("Error collecting metrics: {}", e);
+            Ok(Response::new(Body::from(format!(
+                "# Error collecting metrics: {}",
+                e
+            ))))
+        }
+    }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Register metrics
-    crate::metrics::redpanda::register_metrics();
-    
-    let addr = SocketAddr::from(([0, 0, 0, 0], 9102));
-    
-    let make_svc = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(metrics_handler))
+async fn main() -> Result<(), Box<dyn Error>> {
+    let addr = ([0, 0, 0, 0], 9102).into();
+    let redpanda_url = "http://172.16.192.110:9644/metrics".to_string();
+    let collector = MetricsCollector::new(redpanda_url);
+
+    let make_svc = make_service_fn(move |_conn| {
+        let collector = collector.clone();
+        async move {
+            Ok::<_, Infallible>(service_fn(move |req| handle_metrics(collector.clone(), req)))
+        }
     });
 
+    println!("Starting metrics server on http://0.0.0.0:9102");
     let server = Server::bind(&addr).serve(make_svc);
-    println!("Server running on http://{}", addr);
 
-    server.await?;
+    if let Err(e) = server.await {
+        eprintln!("server error: {}", e);
+    }
+
     Ok(())
 }
