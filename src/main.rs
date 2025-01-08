@@ -24,6 +24,7 @@ lazy_static! {
     ).unwrap();
 }
 
+
 #[derive(Clone)]
 struct MetricsCollector {
     redpanda_url: String,
