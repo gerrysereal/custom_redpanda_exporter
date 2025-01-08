@@ -1,0 +1,17 @@
+[package]
+name = "custom_redpanda_exporter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }
+prometheus = "0.13"
+lazy_static = "1.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+rdkafka = "0.29"
+log = "0.4"
+env_logger = "0.9"
+anyhow = "1.0"
+async-trait = "0.1"
